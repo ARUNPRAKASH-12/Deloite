@@ -1,35 +1,102 @@
-from datetime import datetime
+import json, unittest, datetime
 
-# --------------------------------------------------
-# Helper function
-# Converts ISO 8601 timestamp to milliseconds
-# Example: "2023-09-01T10:15:30Z" -> 1693563330000
-# --------------------------------------------------
-def iso_to_milliseconds(iso_time):
-    # Replace 'Z' with '+00:00' so Python can parse it on Windows
-    dt = datetime.fromisoformat(iso_time.replace("Z", "+00:00"))
-    return int(dt.timestamp() * 1000)
+with open("./data-1.json","r") as f:
+    jsonData1 = json.load(f)
+with open("./data-2.json","r") as f:
+    jsonData2 = json.load(f)
+with open("./data-result.json","r") as f:
+    jsonExpectedResult = json.load(f)
 
 
-# --------------------------------------------------
-# IMPLEMENT: Transform data format 1
-# This format already uses milliseconds
-# --------------------------------------------------
-def transform_format_1(data):
-    return {
-        "deviceId": data["deviceId"],
-        "timestamp": data["timestamp"],
-        "telemetry": data["telemetry"]
+def convertFromFormat1 (jsonObject):
+
+    locationParts = jsonObject['location'].split('/')
+
+    result = {
+        'deviceID': jsonObject['deviceID'],
+        'deviceType': jsonObject['deviceType'],
+        'timestamp': jsonObject['timestamp'],
+        'location': {
+            'country': locationParts[0],
+            'city': locationParts[1],
+            'area': locationParts[2],
+            'factory': locationParts[3],
+            'section': locationParts[4]
+        },
+        'data': {
+            'status': jsonObject['operationStatus'],
+            'temperature': jsonObject['temp']
+        }
     }
 
+    return result
 
-# --------------------------------------------------
-# IMPLEMENT: Transform data format 2
-# This format uses ISO timestamp (needs conversion)
-# --------------------------------------------------
-def transform_format_2(data):
-    return {
-        "deviceId": data["device_id"],
-        "timestamp": iso_to_milliseconds(data["time"]),
-        "telemetry": data["values"]
+def convertFromFormat2 (jsonObject):
+
+    date = datetime.datetime.strptime(
+        jsonObject['timestamp'],
+        '%Y-%m-%dT%H:%M:%S.%fZ'
+    )
+    timestamp = round(
+        (date - datetime.datetime(1970, 1, 1)).total_seconds() * 1000
+    )
+
+    result = {
+        'deviceID': jsonObject['device']['id'],
+        'deviceType': jsonObject['device']['type'],
+        'timestamp': timestamp,
+        'location': {
+            'country': jsonObject['country'],
+            'city': jsonObject['city'],
+            'area': jsonObject['area'],
+            'factory': jsonObject['factory'],
+            'section': jsonObject['section']
+        },
+        'data': jsonObject['data']
     }
+
+    return result
+
+
+def main (jsonObject):
+
+    result = {}
+
+    if (jsonObject.get('device') == None):
+        result = convertFromFormat1(jsonObject)
+    else:
+        result = convertFromFormat2(jsonObject)
+
+    return result
+
+
+class TestSolution(unittest.TestCase):
+
+    def test_sanity(self):
+
+        result = json.loads(json.dumps(jsonExpectedResult))
+        self.assertEqual(
+            result,
+            jsonExpectedResult
+        )
+
+    def test_dataType1(self):
+
+        result = main (jsonData1)
+        self.assertEqual(
+            result,
+            jsonExpectedResult,
+            'Converting from Type 1 failed'
+        )
+
+    def test_dataType2(self):
+
+        result = main (jsonData2)
+        self.assertEqual(
+            result,
+            jsonExpectedResult,
+            'Converting from Type 2 failed'
+        )
+
+if __name__ == '__main__':
+    unittest.main()
